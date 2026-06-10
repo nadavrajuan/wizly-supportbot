@@ -21,8 +21,9 @@ export async function verifySession(token: string): Promise<boolean> {
   }
 }
 
-export function getSessionToken(): string | undefined {
-  return cookies().get(COOKIE_NAME)?.value;
+export async function getSessionToken(): Promise<string | undefined> {
+  const c = await cookies();
+  return c.get(COOKIE_NAME)?.value;
 }
 
 export const COOKIE_OPTIONS = {
