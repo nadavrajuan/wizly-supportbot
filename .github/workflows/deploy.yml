@@ -49,5 +49,5 @@ jobs:
             # Update image reference in compose
             sed -i 's|image: wizly-supportbot:latest|image: ghcr.io/${{ github.repository }}:latest|g' docker-compose.yml || true
 
-            docker-compose up -d --remove-orphans
+            docker compose up -d --remove-orphans
             docker image prune -f

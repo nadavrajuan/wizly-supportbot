@@ -12,7 +12,7 @@
     "better-sqlite3": "^11.3.0",
     "googleapis": "^144.0.0",
     "jose": "^5.9.4",
-    "next": "14.2.15",
+    "next": "15.3.3",
     "openai": "^4.67.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
