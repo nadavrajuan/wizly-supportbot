@@ -6,48 +6,27 @@ on:
 
 jobs:
   deploy:
-    name: Build & Deploy to EC2
+    name: Deploy to EC2
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ghcr.io/${{ github.repository }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Deploy on EC2
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 15m
           script: |
             set -e
             cd /opt/wizly-supportbot
 
-            # Pull latest image
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            docker pull ghcr.io/${{ github.repository }}:latest
+            git fetch origin main
+            git reset --hard origin/main
 
-            # Update image reference in compose
-            sed -i 's|image: wizly-supportbot:latest|image: ghcr.io/${{ github.repository }}:latest|g' docker-compose.yml || true
-
+            docker compose build --no-cache
             docker compose up -d --remove-orphans
             docker image prune -f
+
+            echo "Deploy complete: $(date)"
+            docker compose ps
