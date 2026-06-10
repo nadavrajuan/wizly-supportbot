@@ -36,21 +36,39 @@ export function seedKnowledgeBase() {
 
 function parseQA(content: string): { question: string; answer: string }[] {
   const entries: { question: string; answer: string }[] = [];
+  const lines = content.split('\n');
 
-  // Match numbered items: "N. Q - ..." blocks
-  const blocks = content.split(/\n(?=\d+\.\s+Q\s*[-–])/);
+  let currentQ: string | null = null;
+  let currentA: string[] = [];
+  let inAnswer = false;
 
-  for (const block of blocks) {
-    const qMatch = block.match(/^\d+\.\s+Q\s*[-–]\s*([\s\S]*?)(?=\s+A\s*[-–])/i);
-    const aMatch = block.match(/A\s*[-–]\s*([\s\S]+)$/i);
-    if (qMatch && aMatch) {
-      const question = qMatch[1].replace(/\s+/g, ' ').trim();
-      const answer = aMatch[1].replace(/\s+/g, ' ').trim();
-      if (question && answer) {
-        entries.push({ question, answer });
-      }
+  function flush() {
+    if (currentQ && currentA.length) {
+      const unescape = (s: string) =>
+        s.replace(/\\-/g, '-').replace(/\\>/g, '>').replace(/\s+/g, ' ').trim();
+      entries.push({ question: unescape(currentQ), answer: unescape(currentA.join(' ')) });
     }
   }
+
+  for (const line of lines) {
+    // Q line: "N. Q \- text" or "N. Q - text"
+    const qMatch = line.match(/^\d+\.\s+Q\s*\\?-\s*(.+)/);
+    // A line: "   A \- text" or "   A - text"
+    const aMatch = line.match(/^\s+A\s*\\?-\s*(.+)/);
+
+    if (qMatch) {
+      flush();
+      currentQ = qMatch[1];
+      currentA = [];
+      inAnswer = false;
+    } else if (aMatch && currentQ) {
+      currentA = [aMatch[1]];
+      inAnswer = true;
+    } else if (inAnswer && line.trim() && !line.match(/^\d+\.\s+Q/)) {
+      currentA.push(line.trim());
+    }
+  }
+  flush();
 
   return entries;
 }
