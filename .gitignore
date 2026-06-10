@@ -1,0 +1,24 @@
+# deps
+node_modules/
+.pnp
+.pnp.js
+
+# next.js
+.next/
+out/
+
+# production
+build/
+
+# env files — never commit secrets
+.env
+.env.local
+.env.*.local
+
+# data dir — SQLite DB lives here on the server
+data/
+
+# misc
+.DS_Store
+*.pem
+coverage/
