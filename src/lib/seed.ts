@@ -10,8 +10,11 @@ export function seedKnowledgeBase() {
 
   if (count > 0) return;
 
-  const mdPath = path.join(process.cwd(), 'Wyzly support - Q&A.md');
-  if (!fs.existsSync(mdPath)) return;
+  const candidates = ['Wyzly support - Q&A.md', 'knowledge.md'];
+  const mdPath = candidates
+    .map((f) => path.join(process.cwd(), f))
+    .find((p) => fs.existsSync(p));
+  if (!mdPath) return;
 
   const content = fs.readFileSync(mdPath, 'utf-8');
   const entries = parseQA(content);

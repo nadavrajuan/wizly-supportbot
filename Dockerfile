@@ -15,7 +15,7 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV JWT_SECRET=build_placeholder
 
-RUN npm run build
+RUN npm run build && cp "Wyzly support - Q&A.md" knowledge.md
 
 # ─── Stage 2: Runtime ────────────────────────────────────────────────────────
 FROM node:20-alpine AS runner
@@ -30,8 +30,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
-# Include the MD knowledge base so it can be seeded on first run
-COPY --from=builder /app/"Wyzly support - Q&A.md" ./
+# Knowledge base seed file
+COPY --from=builder /app/knowledge.md ./knowledge.md
 
 VOLUME ["/app/data"]
 
