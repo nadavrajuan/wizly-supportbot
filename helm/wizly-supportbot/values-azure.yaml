@@ -1,0 +1,14 @@
+# Azure overrides for superfy-utils-aks (westus2)
+
+image:
+  repository: "superfyutilsacr.azurecr.io/wizly-supportbot"
+  tag: "azure-openai"
+
+config:
+  NODE_ENV: "production"
+  DATA_DIR: "/app/data"
+
+ingress:
+  className: "webapprouting.kubernetes.azure.com"
+  host: "wizly-supportbot.westus2.cloudapp.azure.com"
+  clusterIssuer: "letsencrypt"

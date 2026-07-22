@@ -15,9 +15,9 @@ export async function GET(req: NextRequest) {
     let accountEmail = '';
     if (tokens.access_token) {
       client.setCredentials(tokens);
-      const oauth2 = google.oauth2({ version: 'v2', auth: client });
-      const info = await oauth2.userinfo.get();
-      accountEmail = info.data.email ?? '';
+      const gmail = google.gmail({ version: 'v1', auth: client });
+      const profile = await gmail.users.getProfile({ userId: 'me' });
+      accountEmail = profile.data.emailAddress ?? '';
     }
 
     saveTokens({ ...tokens, accountEmail });

@@ -1,32 +1,57 @@
-name: Deploy
+name: Deploy to Azure AKS
 
 on:
   push:
     branches: [main]
 
+env:
+  AZURE_RESOURCE_GROUP: superfy-utils-rg
+  AZURE_AKS_CLUSTER: superfy-utils-aks
+  AZURE_ACR_NAME: superfyutilsacr
+  IMAGE_NAME: wizly-supportbot
+  HELM_RELEASE: wizly-supportbot
+  HELM_NAMESPACE: wizly-supportbot
+
 jobs:
   deploy:
-    name: Deploy to EC2
+    name: Build and deploy to AKS
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          command_timeout: 15m
-          script: |
-            set -e
-            cd /opt/wizly-supportbot
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-            git fetch origin main
-            git reset --hard origin/main
+      - name: Set Azure subscription
+        run: az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
 
-            docker compose build --no-cache
-            docker compose up -d --remove-orphans
-            docker image prune -f
+      - name: Build and push image to ACR
+        run: |
+          az acr build \
+            --registry ${{ env.AZURE_ACR_NAME }} \
+            --image ${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            --image ${{ env.IMAGE_NAME }}:latest \
+            .
 
-            echo "Deploy complete: $(date)"
-            docker compose ps
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --name ${{ env.AZURE_AKS_CLUSTER }} \
+            --overwrite-existing
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install ${{ env.HELM_RELEASE }} ./helm/wizly-supportbot \
+            --namespace ${{ env.HELM_NAMESPACE }} \
+            --create-namespace \
+            -f ./helm/wizly-supportbot/values-azure.yaml \
+            --set image.tag=${{ github.sha }} \
+            --wait --timeout 5m

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
+import { getJwtSecret } from './lib/jwt-secret';
 
 const PROTECTED = ['/dashboard', '/api/emails', '/api/email', '/api/generate', '/api/send', '/api/knowledge', '/api/settings', '/api/auth/gmail'];
 
@@ -21,8 +22,7 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'fallback-dev-secret-change-me');
-    await jwtVerify(token, secret);
+    await jwtVerify(token, getJwtSecret());
     return NextResponse.next();
   } catch {
     if (pathname.startsWith('/api/')) {

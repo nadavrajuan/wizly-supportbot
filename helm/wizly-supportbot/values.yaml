@@ -1,0 +1,29 @@
+image:
+  repository: "superfyutilsacr.azurecr.io/wizly-supportbot"
+  tag: "initial"
+  pullPolicy: Always
+
+replicaCount: 1
+
+config:
+  NODE_ENV: "production"
+  DATA_DIR: "/app/data"
+
+ingress:
+  className: "webapprouting.kubernetes.azure.com"
+  host: "wizly-supportbot.westus2.cloudapp.azure.com"
+  clusterIssuer: "letsencrypt"
+
+persistence:
+  enabled: true
+  size: 1Gi
+  storageClass: ""
+  accessMode: ReadWriteOnce
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "256Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"

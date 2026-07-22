@@ -1,4 +1,4 @@
-import OpenAI from 'openai';
+import OpenAI, { AzureOpenAI } from 'openai';
 import { getDb } from './db';
 
 function getSetting(key: string): string {
@@ -9,13 +9,32 @@ function getSetting(key: string): string {
   return row?.value ?? '';
 }
 
+function isAzureProvider(): boolean {
+  return process.env.AI_PROVIDER === 'azure';
+}
+
 function getOpenAIClient(): OpenAI {
+  if (isAzureProvider()) {
+    const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
+    const apiKey = process.env.AZURE_OPENAI_API_KEY;
+    if (!endpoint || !apiKey) {
+      throw new Error('AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY must be set when AI_PROVIDER=azure.');
+    }
+    return new AzureOpenAI({
+      endpoint,
+      apiKey,
+      apiVersion: process.env.AZURE_OPENAI_API_VERSION || '2024-10-21',
+    });
+  }
   const apiKey = getSetting('openai_api_key');
   if (!apiKey) throw new Error('OpenAI API key not configured. Go to Settings to add it.');
   return new OpenAI({ apiKey });
 }
 
 export function getModel(): string {
+  if (isAzureProvider()) {
+    return process.env.AZURE_OPENAI_CHAT_DEPLOYMENT || 'gpt-chat';
+  }
   return getSetting('openai_model') || 'gpt-4.1';
 }
 
@@ -57,7 +76,7 @@ Please write a support response to this email.`;
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userMessage },
     ],
-    max_tokens: 800,
+    max_completion_tokens: 800,
     temperature: 0.4,
   });
 

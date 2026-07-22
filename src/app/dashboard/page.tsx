@@ -340,34 +340,47 @@ function DashboardInner() {
     if (!selectedEmail || !aiResponse.trim()) return;
     setSending(true);
 
-    // Send reply
-    await fetch('/api/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        to: extractEmail(selectedEmail.from),
-        subject: selectedEmail.subject,
-        body: aiResponse,
-        threadId: selectedEmail.threadId,
-        inReplyTo: selectedEmail.messageId,
-      }),
-    });
+    try {
+      const sendResponse = await fetch('/api/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: extractEmail(selectedEmail.from),
+          subject: selectedEmail.subject,
+          body: aiResponse,
+          threadId: selectedEmail.threadId,
+          inReplyTo: selectedEmail.messageId,
+        }),
+      });
 
-    // Save to knowledge base
-    await fetch('/api/knowledge', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        question: selectedEmail.subject,
-        answer: aiResponse,
-        source: 'approved',
-      }),
-    });
+      const sendData = await sendResponse.json();
+      if (!sendResponse.ok) {
+        showToast(`Error: ${sendData.error ?? 'Failed to send reply'}`);
+        return;
+      }
 
-    setSending(false);
-    showToast('Reply sent and saved to knowledge base ✓');
-    setAiResponse('');
-    fetchKnowledge();
+      const knowledgeResponse = await fetch('/api/knowledge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: selectedEmail.subject,
+          answer: aiResponse,
+          source: 'approved',
+        }),
+      });
+
+      if (!knowledgeResponse.ok) {
+        const knowledgeData = await knowledgeResponse.json();
+        showToast(`Reply sent, but failed to save to knowledge base: ${knowledgeData.error ?? 'Unknown error'}`);
+        return;
+      }
+
+      showToast('Reply sent and saved to knowledge base ✓');
+      setAiResponse('');
+      fetchKnowledge();
+    } finally {
+      setSending(false);
+    }
   }
 
   function reject() {

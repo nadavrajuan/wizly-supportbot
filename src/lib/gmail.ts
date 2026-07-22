@@ -193,7 +193,7 @@ export async function getEmail(id: string): Promise<EmailDetail | null> {
 
 export async function markAsRead(id: string): Promise<void> {
   const auth = await getAuthenticatedClient();
-  if (!auth) return;
+  if (!auth) throw new Error('Gmail not connected');
 
   const gmail = google.gmail({ version: 'v1', auth });
   await gmail.users.messages.modify({
@@ -211,7 +211,7 @@ export async function sendReply(params: {
   inReplyTo?: string;
 }): Promise<void> {
   const auth = await getAuthenticatedClient();
-  if (!auth) return;
+  if (!auth) throw new Error('Gmail not connected');
 
   const gmail = google.gmail({ version: 'v1', auth });
 

@@ -1,20 +1,20 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
+import { getJwtSecret } from './jwt-secret';
 
 const COOKIE_NAME = 'ws_session';
-const secret = () => new TextEncoder().encode(process.env.JWT_SECRET || 'fallback-dev-secret-change-me');
 
 export async function createSession(): Promise<string> {
   return new SignJWT({ authenticated: true })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
-    .sign(secret());
+    .sign(getJwtSecret());
 }
 
 export async function verifySession(token: string): Promise<boolean> {
   try {
-    await jwtVerify(token, secret());
+    await jwtVerify(token, getJwtSecret());
     return true;
   } catch {
     return false;
