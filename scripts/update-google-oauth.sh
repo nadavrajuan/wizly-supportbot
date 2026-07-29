@@ -11,9 +11,10 @@ fi
 
 GOOGLE_CLIENT_ID="$1"
 GOOGLE_CLIENT_SECRET="$2"
+GOOGLE_REDIRECT_URI="https://wyzly-support.tacobrain.online/api/auth/gmail/callback"
 
 kubectl patch secret wizly-supportbot-secrets -n wizly-supportbot --type merge \
-  -p "{\"stringData\":{\"GOOGLE_CLIENT_ID\":\"$GOOGLE_CLIENT_ID\",\"GOOGLE_CLIENT_SECRET\":\"$GOOGLE_CLIENT_SECRET\"}}"
+  -p "{\"stringData\":{\"GOOGLE_CLIENT_ID\":\"$GOOGLE_CLIENT_ID\",\"GOOGLE_CLIENT_SECRET\":\"$GOOGLE_CLIENT_SECRET\",\"GOOGLE_REDIRECT_URI\":\"$GOOGLE_REDIRECT_URI\"}}"
 
 kubectl rollout restart deployment/wizly-supportbot -n wizly-supportbot
 echo "Google OAuth credentials updated. Pod restarting..."

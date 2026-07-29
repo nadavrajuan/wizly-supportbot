@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 import { getJwtSecret } from './lib/jwt-secret';
+import { publicRedirectPath } from './lib/app-url';
 
 const PROTECTED = ['/dashboard', '/api/emails', '/api/email', '/api/generate', '/api/send', '/api/knowledge', '/api/settings', '/api/auth/gmail'];
 
@@ -18,7 +19,7 @@ export async function middleware(request: NextRequest) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    return NextResponse.redirect(new URL('/', request.url));
+    return NextResponse.redirect(publicRedirectPath(request, '/'));
   }
 
   try {
@@ -28,7 +29,7 @@ export async function middleware(request: NextRequest) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    return NextResponse.redirect(new URL('/', request.url));
+    return NextResponse.redirect(publicRedirectPath(request, '/'));
   }
 }
 

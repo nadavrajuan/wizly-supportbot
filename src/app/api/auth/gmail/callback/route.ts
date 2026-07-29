@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOAuthClient, saveTokens } from '@/lib/gmail';
+import { publicRedirectPath } from '@/lib/app-url';
 import { google } from 'googleapis';
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get('code');
   if (!code) {
-    return NextResponse.redirect(new URL('/dashboard?gmail_error=no_code', req.url));
+    return NextResponse.redirect(publicRedirectPath(req, '/dashboard?gmail_error=no_code'));
   }
 
   try {
@@ -21,9 +22,9 @@ export async function GET(req: NextRequest) {
     }
 
     saveTokens({ ...tokens, accountEmail });
-    return NextResponse.redirect(new URL('/dashboard?gmail_connected=1', req.url));
+    return NextResponse.redirect(publicRedirectPath(req, '/dashboard?gmail_connected=1'));
   } catch (err) {
     console.error('Gmail OAuth error:', err);
-    return NextResponse.redirect(new URL('/dashboard?gmail_error=auth_failed', req.url));
+    return NextResponse.redirect(publicRedirectPath(req, '/dashboard?gmail_error=auth_failed'));
   }
 }

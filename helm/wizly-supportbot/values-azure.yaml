@@ -7,8 +7,9 @@ image:
 config:
   NODE_ENV: "production"
   DATA_DIR: "/app/data"
+  APP_URL: "https://wyzly-support.tacobrain.online"
 
 ingress:
   className: "webapprouting.kubernetes.azure.com"
-  host: "wizly-supportbot.westus2.cloudapp.azure.com"
+  host: "wyzly-support.tacobrain.online"
   clusterIssuer: "letsencrypt"
