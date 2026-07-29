@@ -13,7 +13,7 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV JWT_SECRET=build_placeholder
 
-RUN npm run build && cp "Wyzly support - Q&A.md" knowledge.md
+RUN npm run build && cp "docs/Wyzly support - Q&A.md" knowledge.md
 
 # ─── Stage 2: Runtime ────────────────────────────────────────────────────────
 FROM node:20-alpine AS runner

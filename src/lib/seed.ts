@@ -10,7 +10,7 @@ export function seedKnowledgeBase() {
 
   if (count > 0) return;
 
-  const candidates = ['Wyzly support - Q&A.md', 'knowledge.md'];
+  const candidates = ['docs/Wyzly support - Q&A.md', 'knowledge.md'];
   const mdPath = candidates
     .map((f) => path.join(process.cwd(), f))
     .find((p) => fs.existsSync(p));
