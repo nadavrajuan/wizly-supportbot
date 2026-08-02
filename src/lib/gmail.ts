@@ -1,4 +1,9 @@
 import { google, gmail_v1 } from 'googleapis';
+import {
+  buildMultipartAlternativeBody,
+  markdownToHtmlEmail,
+  markdownToPlainText,
+} from './email-format';
 import { getDb } from './db';
 
 export function getOAuthClient() {
@@ -215,14 +220,19 @@ export async function sendReply(params: {
 
   const gmail = google.gmail({ version: 'v1', auth });
 
+  const plainBody = markdownToPlainText(params.body);
+  const htmlBody = markdownToHtmlEmail(params.body);
+  const { boundary, body: multipartBody } = buildMultipartAlternativeBody(plainBody, htmlBody);
+
   const rawMessage = [
     `To: ${params.to}`,
     `Subject: ${params.subject.startsWith('Re:') ? params.subject : `Re: ${params.subject}`}`,
     `In-Reply-To: ${params.inReplyTo ?? ''}`,
     `References: ${params.inReplyTo ?? ''}`,
-    'Content-Type: text/plain; charset=utf-8',
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
     '',
-    params.body,
+    multipartBody,
   ].join('\r\n');
 
   const encoded = Buffer.from(rawMessage).toString('base64url');
