@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
+import { SanitizedEmailHtml } from '@/components/SanitizedEmailHtml';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -16,11 +17,20 @@ interface EmailSummary {
   isUnread: boolean;
 }
 
+interface EmailAttachment {
+  attachmentId: string;
+  mimeType: string;
+  filename: string;
+  contentId?: string;
+  size: number;
+}
+
 interface EmailDetail extends EmailSummary {
   body: string;
   bodyHtml: string;
   to: string;
   messageId: string;
+  attachments: EmailAttachment[];
 }
 
 interface KnowledgeEntry {
@@ -42,14 +52,24 @@ interface Settings {
 
 function formatDate(dateStr: string): string {
   try {
-    const d = new Date(dateStr);
+    const date = new Date(dateStr);
     const now = new Date();
-    const isToday = d.toDateString() === now.toDateString();
-    if (isToday) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    const isToday = date.toDateString() === now.toDateString();
+    if (isToday) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   } catch {
     return dateStr;
   }
+}
+
+function formatAttachmentSize(size: number): string {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function attachmentUrl(messageId: string, attachmentId: string): string {
+  return `/api/email/${messageId}/attachments/${attachmentId}`;
 }
 
 function extractEmail(from: string): string {
@@ -259,6 +279,16 @@ function DashboardInner() {
   const [editKB, setEditKB] = useState<KnowledgeEntry | null>(null);
   const [toast, setToast] = useState('');
   const [expandedKB, setExpandedKB] = useState<Set<number>>(new Set());
+
+  const imageAttachments = useMemo(
+    () => (selectedEmail?.attachments ?? []).filter((attachment) => attachment.mimeType.startsWith('image/')),
+    [selectedEmail?.attachments]
+  );
+
+  const fileAttachments = useMemo(
+    () => (selectedEmail?.attachments ?? []).filter((attachment) => !attachment.mimeType.startsWith('image/')),
+    [selectedEmail?.attachments]
+  );
 
   function showToast(msg: string) {
     setToast(msg);
@@ -595,9 +625,67 @@ function DashboardInner() {
                 {/* Email Body */}
                 <div className="bg-white mx-6 mt-4 rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-3">Email</p>
-                  <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
-                    {selectedEmail.body || selectedEmail.snippet}
-                  </div>
+                  {selectedEmail.bodyHtml ? (
+                    <SanitizedEmailHtml
+                      html={selectedEmail.bodyHtml}
+                      fallback={selectedEmail.body || selectedEmail.snippet}
+                      className="text-sm text-gray-800 leading-relaxed max-w-none [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-lg [&_a]:text-indigo-600 [&_a]:underline"
+                    />
+                  ) : (
+                    <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                      {selectedEmail.body || selectedEmail.snippet}
+                    </div>
+                  )}
+
+                  {(imageAttachments.length > 0 || fileAttachments.length > 0) && (
+                    <div className="mt-5 pt-5 border-t border-gray-100">
+                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-3">
+                        Attachments
+                      </p>
+
+                      {imageAttachments.length > 0 && (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+                          {imageAttachments.map((attachment) => (
+                            <a
+                              key={attachment.attachmentId}
+                              href={attachmentUrl(selectedEmail.id, attachment.attachmentId)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block rounded-lg border border-gray-200 overflow-hidden hover:border-indigo-300 transition"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={attachmentUrl(selectedEmail.id, attachment.attachmentId)}
+                                alt={attachment.filename}
+                                className="w-full h-32 object-cover bg-gray-50"
+                              />
+                              <p className="text-xs text-gray-500 px-2 py-1.5 truncate">{attachment.filename}</p>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+
+                      {fileAttachments.length > 0 && (
+                        <ul className="space-y-2">
+                          {fileAttachments.map((attachment) => (
+                            <li key={attachment.attachmentId}>
+                              <a
+                                href={attachmentUrl(selectedEmail.id, attachment.attachmentId)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-indigo-600 hover:text-indigo-700 underline"
+                              >
+                                {attachment.filename}
+                              </a>
+                              <span className="text-xs text-gray-400 ml-2">
+                                ({formatAttachmentSize(attachment.size)})
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* AI Response Section */}

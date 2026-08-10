@@ -47,6 +47,18 @@ Body: Hi, how do I cancel my subscription?
 - [ ] Subject, sender, and body display correctly
 - [ ] No error toasts or blank content
 
+**Image test (optional but recommended):**
+
+Send a second test email that includes:
+- An inline screenshot pasted into the Gmail compose body
+- A regular image file attached (e.g. `.png`)
+
+Then in the dashboard:
+
+- [ ] Inline image appears in the email body (rich view)
+- [ ] Attached image appears in the **Attachments** section below the body
+- [ ] Clicking an attachment opens the image in a new tab
+
 ---
 
 ## 4. Generate AI reply
