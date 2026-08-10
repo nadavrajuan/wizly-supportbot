@@ -77,11 +77,6 @@ function attachmentUrl(messageId: string, attachmentId: string): string {
   return `/api/email/${messageId}/attachments/${attachmentId}`;
 }
 
-function extractEmail(from: string): string {
-  const match = from.match(/<(.+?)>/);
-  return match ? match[1] : from;
-}
-
 function extractName(from: string): string {
   const match = from.match(/^"?([^"<]+)"?\s*</);
   return match ? match[1].trim() : from.split('@')[0];
@@ -730,7 +725,7 @@ function DashboardInner() {
 
                     {!aiResponse && !generating && (
                       <div className="text-sm text-gray-400 italic py-4 text-center">
-                        Click "Generate Response" to create an AI-powered reply using your knowledge base.
+                        Click Generate Response to create an AI-powered reply using your knowledge base.
                       </div>
                     )}
 
