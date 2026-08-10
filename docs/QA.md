@@ -81,6 +81,16 @@ Then in the dashboard:
 - [ ] Reply is in the **same email thread** (not a unrelated new email)
 - [ ] Sender display name is **Wyzly Support** (or similar), not a personal name
 
+**Forwarded email test (optional but recommended):**
+
+1. From personal account **A**, send a customer-style email to personal account **B**
+2. From account **B**, **Forward** that email to `info@wyzly.net`
+3. In the dashboard, open the forwarded message
+4. In the **AI Response** box header, confirm **To** shows account **A** (original sender)
+5. Confirm **Cc** shows account **B** (forwarder)
+6. Generate and **Approve & Send**
+7. Confirm account **A** receives the reply and account **B** is CC'd
+
 ---
 
 ## 6. Knowledge base

@@ -4,6 +4,7 @@ import {
   markdownToHtmlEmail,
   markdownToPlainText,
 } from './email-format';
+import { resolveReplyTargets, type ReplyTargets } from './email-reply-targets';
 import { getDb } from './db';
 
 export function getOAuthClient() {
@@ -94,7 +95,7 @@ export interface EmailAttachment {
   size: number;
 }
 
-export interface EmailDetail extends EmailSummary {
+export interface EmailDetail extends EmailSummary, ReplyTargets {
   body: string;
   bodyHtml: string;
   to: string;
@@ -252,6 +253,15 @@ export async function getEmail(id: string): Promise<EmailDetail | null> {
   const attachments: EmailAttachment[] = [];
   collectAttachments(payload, attachments);
   const bodyHtml = rewriteCidReferences(html, id, attachments);
+  const storedTokens = getStoredTokens();
+  const replyTargets = resolveReplyTargets({
+    subject: extractHeader(headers, 'Subject') || '(no subject)',
+    from: extractHeader(headers, 'From'),
+    to: extractHeader(headers, 'To'),
+    body: text,
+    bodyHtml,
+    supportMailboxEmails: storedTokens?.account_email ? [storedTokens.account_email] : [],
+  });
 
   return {
     id: msg.data.id!,
@@ -266,6 +276,7 @@ export async function getEmail(id: string): Promise<EmailDetail | null> {
     bodyHtml,
     attachments,
     isUnread: (msg.data.labelIds ?? []).includes('UNREAD'),
+    ...replyTargets,
   };
 }
 
@@ -313,6 +324,7 @@ export async function markAsRead(id: string): Promise<void> {
 
 export async function sendReply(params: {
   to: string;
+  cc?: string;
   subject: string;
   body: string;
   threadId: string;
@@ -327,16 +339,21 @@ export async function sendReply(params: {
   const htmlBody = markdownToHtmlEmail(params.body);
   const { boundary, body: multipartBody } = buildMultipartAlternativeBody(plainBody, htmlBody);
 
-  const rawMessage = [
-    `To: ${params.to}`,
+  const headers = [`To: ${params.to}`];
+  if (params.cc) {
+    headers.push(`Cc: ${params.cc}`);
+  }
+  headers.push(
     `Subject: ${params.subject.startsWith('Re:') ? params.subject : `Re: ${params.subject}`}`,
     `In-Reply-To: ${params.inReplyTo ?? ''}`,
     `References: ${params.inReplyTo ?? ''}`,
     'MIME-Version: 1.0',
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
     '',
-    multipartBody,
-  ].join('\r\n');
+    multipartBody
+  );
+
+  const rawMessage = headers.join('\r\n');
 
   const encoded = Buffer.from(rawMessage).toString('base64url');
 

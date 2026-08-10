@@ -31,6 +31,11 @@ interface EmailDetail extends EmailSummary {
   to: string;
   messageId: string;
   attachments: EmailAttachment[];
+  replyTo: string;
+  replyToDisplay: string;
+  replyCc?: string;
+  replyCcDisplay?: string;
+  isForwarded: boolean;
 }
 
 interface KnowledgeEntry {
@@ -375,7 +380,7 @@ function DashboardInner() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          to: extractEmail(selectedEmail.from),
+          emailId: selectedEmail.id,
           subject: selectedEmail.subject,
           body: aiResponse,
           threadId: selectedEmail.threadId,
@@ -710,6 +715,17 @@ function DashboardInner() {
                           </>
                         )}
                       </button>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 text-xs text-gray-500">
+                      <span>
+                        <span className="font-medium text-gray-700">To:</span> {selectedEmail.replyToDisplay}
+                      </span>
+                      {selectedEmail.replyCcDisplay && (
+                        <span>
+                          <span className="font-medium text-gray-700">Cc:</span> {selectedEmail.replyCcDisplay}
+                        </span>
+                      )}
                     </div>
 
                     {!aiResponse && !generating && (
