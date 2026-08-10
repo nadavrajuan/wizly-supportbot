@@ -5,6 +5,7 @@ import {
   markdownToPlainText,
 } from './email-format';
 import { resolveReplyTargets, type ReplyTargets } from './email-reply-targets';
+import { decodeGmailBase64 } from './gmail-base64';
 import { getDb } from './db';
 
 export function getOAuthClient() {
@@ -93,6 +94,7 @@ export interface EmailAttachment {
   filename: string;
   contentId?: string;
   size: number;
+  inlineData?: string;
 }
 
 export interface EmailDetail extends EmailSummary, ReplyTargets {
@@ -117,6 +119,10 @@ function extractFilenameFromDisposition(contentDisposition: string): string {
   return filenameMatch?.[1]?.trim() ?? '';
 }
 
+function attachmentApiPath(messageId: string, attachmentId: string): string {
+  return `/api/email/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`;
+}
+
 function collectAttachments(
   part: gmail_v1.Schema$MessagePart | undefined,
   attachments: EmailAttachment[]
@@ -124,17 +130,17 @@ function collectAttachments(
   if (!part) return;
 
   const attachmentId = part.body?.attachmentId;
+  const inlineData = part.body?.data;
   const mimeType = part.mimeType ?? 'application/octet-stream';
   const isImagePart = mimeType.startsWith('image/');
   const hasFilename = Boolean(part.filename);
+  const contentId = normalizeContentId(extractHeader(part.headers, 'Content-ID'));
+  const contentDisposition = extractHeader(part.headers, 'Content-Disposition');
+  const filename = part.filename
+    || extractFilenameFromDisposition(contentDisposition)
+    || (isImagePart ? `image.${mimeType.split('/')[1] ?? 'bin'}` : 'attachment');
 
-  if (attachmentId && (hasFilename || isImagePart)) {
-    const contentId = normalizeContentId(extractHeader(part.headers, 'Content-ID'));
-    const contentDisposition = extractHeader(part.headers, 'Content-Disposition');
-    const filename = part.filename
-      || extractFilenameFromDisposition(contentDisposition)
-      || (isImagePart ? `image.${mimeType.split('/')[1] ?? 'bin'}` : 'attachment');
-
+  if (attachmentId && (hasFilename || isImagePart || contentDisposition.toLowerCase().includes('inline'))) {
     attachments.push({
       attachmentId,
       mimeType,
@@ -142,11 +148,32 @@ function collectAttachments(
       contentId: contentId || undefined,
       size: part.body?.size ?? 0,
     });
+  } else if (inlineData && isImagePart) {
+    const inlineAttachmentId = part.partId ?? `inline-${contentId || attachments.length}`;
+    attachments.push({
+      attachmentId: inlineAttachmentId,
+      mimeType,
+      filename,
+      contentId: contentId || undefined,
+      size: part.body?.size ?? inlineData.length,
+      inlineData,
+    });
   }
 
   for (const childPart of part.parts ?? []) {
     collectAttachments(childPart, attachments);
   }
+}
+
+function contentIdsMatch(reference: string, contentId: string): boolean {
+  const normalizedReference = normalizeContentId(reference);
+  const normalizedContentId = normalizeContentId(contentId);
+  if (!normalizedReference || !normalizedContentId) return false;
+  if (normalizedReference === normalizedContentId) return true;
+
+  const referenceLocalPart = normalizedReference.split('@')[0];
+  const contentIdLocalPart = normalizedContentId.split('@')[0];
+  return referenceLocalPart === contentIdLocalPart;
 }
 
 function rewriteCidReferences(
@@ -157,12 +184,11 @@ function rewriteCidReferences(
   if (!html) return html;
 
   return html.replace(/cid:([^"'\s>]+)/gi, (match, contentIdReference: string) => {
-    const normalizedContentId = normalizeContentId(contentIdReference);
     const attachment = attachments.find(
-      (entry) => entry.contentId === normalizedContentId
+      (entry) => entry.contentId && contentIdsMatch(contentIdReference, entry.contentId)
     );
     if (!attachment) return match;
-    return `/api/email/${messageId}/attachments/${attachment.attachmentId}`;
+    return attachmentApiPath(messageId, attachment.attachmentId);
   });
 }
 
@@ -296,6 +322,13 @@ export async function getAttachmentBytes(
   const attachment = attachments.find((entry) => entry.attachmentId === attachmentId);
   if (!attachment) return null;
 
+  if (attachment.inlineData) {
+    return {
+      data: decodeGmailBase64(attachment.inlineData),
+      mimeType: attachment.mimeType,
+    };
+  }
+
   const response = await gmail.users.messages.attachments.get({
     userId: 'me',
     messageId,
@@ -305,7 +338,7 @@ export async function getAttachmentBytes(
   if (!response.data.data) return null;
 
   return {
-    data: Buffer.from(response.data.data, 'base64url'),
+    data: decodeGmailBase64(response.data.data),
     mimeType: attachment.mimeType,
   };
 }

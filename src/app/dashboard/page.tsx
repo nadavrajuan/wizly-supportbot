@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { SanitizedEmailHtml } from '@/components/SanitizedEmailHtml';
+import { AuthenticatedEmailImage, attachmentApiPath } from '@/components/AuthenticatedEmailImage';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -71,10 +72,6 @@ function formatAttachmentSize(size: number): string {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function attachmentUrl(messageId: string, attachmentId: string): string {
-  return `/api/email/${messageId}/attachments/${attachmentId}`;
 }
 
 function extractName(from: string): string {
@@ -272,6 +269,8 @@ function DashboardInner() {
   const [loadingEmail, setLoadingEmail] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [sending, setSending] = useState(false);
+  const [replyToField, setReplyToField] = useState('');
+  const [replyCcField, setReplyCcField] = useState('');
 
   const [gmailConnected, setGmailConnected] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
@@ -335,15 +334,20 @@ function DashboardInner() {
     setAiResponse('');
     setLoadingEmail(true);
 
-    const res = await fetch(`/api/email/${summary.id}`);
-    const detail: EmailDetail = await res.json();
-    setSelectedEmail(detail);
-    setLoadingEmail(false);
+    try {
+      const res = await fetch(`/api/email/${summary.id}`);
+      const detail: EmailDetail = await res.json();
+      setSelectedEmail(detail);
+      setReplyToField(detail.replyToDisplay || detail.replyTo);
+      setReplyCcField(detail.replyCcDisplay || detail.replyCc || '');
+    } finally {
+      setLoadingEmail(false);
+    }
 
     if (summary.isUnread) {
       await fetch(`/api/email/${summary.id}/mark-read`, { method: 'POST' });
       setEmails((prev) =>
-        prev.map((e) => (e.id === summary.id ? { ...e, isUnread: false } : e))
+        prev.map((email) => (email.id === summary.id ? { ...email, isUnread: false } : email))
       );
     }
   }
@@ -352,18 +356,35 @@ function DashboardInner() {
     if (!selectedEmail) return;
     setGenerating(true);
     setAiResponse('');
-    const res = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subject: selectedEmail.subject, body: selectedEmail.body }),
-    });
-    const data = await res.json();
-    if (data.error) {
-      showToast(`Error: ${data.error}`);
-    } else {
-      setAiResponse(data.response);
+
+    try {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subject: selectedEmail.subject, body: selectedEmail.body }),
+        signal: AbortSignal.timeout(120_000),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(`Error: ${data.error ?? 'Failed to generate response'}`);
+        return;
+      }
+
+      if (data.error) {
+        showToast(`Error: ${data.error}`);
+      } else {
+        setAiResponse(data.response ?? '');
+      }
+    } catch (error: unknown) {
+      if (error instanceof DOMException && error.name === 'TimeoutError') {
+        showToast('Error: AI response timed out. Try again.');
+      } else {
+        showToast('Error: Failed to generate response');
+      }
+    } finally {
+      setGenerating(false);
     }
-    setGenerating(false);
   }
 
   async function approve() {
@@ -376,6 +397,8 @@ function DashboardInner() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           emailId: selectedEmail.id,
+          to: replyToField,
+          cc: replyCcField,
           subject: selectedEmail.subject,
           body: aiResponse,
           threadId: selectedEmail.threadId,
@@ -646,21 +669,28 @@ function DashboardInner() {
                       {imageAttachments.length > 0 && (
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
                           {imageAttachments.map((attachment) => (
-                            <a
+                            <div
                               key={attachment.attachmentId}
-                              href={attachmentUrl(selectedEmail.id, attachment.attachmentId)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="block rounded-lg border border-gray-200 overflow-hidden hover:border-indigo-300 transition"
+                              className="block rounded-lg border border-gray-200 overflow-hidden"
                             >
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={attachmentUrl(selectedEmail.id, attachment.attachmentId)}
+                              <AuthenticatedEmailImage
+                                messageId={selectedEmail.id}
+                                attachmentId={attachment.attachmentId}
                                 alt={attachment.filename}
                                 className="w-full h-32 object-cover bg-gray-50"
                               />
-                              <p className="text-xs text-gray-500 px-2 py-1.5 truncate">{attachment.filename}</p>
-                            </a>
+                              <div className="px-2 py-1.5 flex items-center justify-between gap-2">
+                                <p className="text-xs text-gray-500 truncate">{attachment.filename}</p>
+                                <a
+                                  href={attachmentApiPath(selectedEmail.id, attachment.attachmentId)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-indigo-600 hover:text-indigo-700 shrink-0"
+                                >
+                                  Open
+                                </a>
+                              </div>
+                            </div>
                           ))}
                         </div>
                       )}
@@ -670,7 +700,7 @@ function DashboardInner() {
                           {fileAttachments.map((attachment) => (
                             <li key={attachment.attachmentId}>
                               <a
-                                href={attachmentUrl(selectedEmail.id, attachment.attachmentId)}
+                                href={attachmentApiPath(selectedEmail.id, attachment.attachmentId)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-sm text-indigo-600 hover:text-indigo-700 underline"
@@ -712,15 +742,27 @@ function DashboardInner() {
                       </button>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 text-xs text-gray-500">
-                      <span>
-                        <span className="font-medium text-gray-700">To:</span> {selectedEmail.replyToDisplay}
-                      </span>
-                      {selectedEmail.replyCcDisplay && (
-                        <span>
-                          <span className="font-medium text-gray-700">Cc:</span> {selectedEmail.replyCcDisplay}
-                        </span>
-                      )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                      <label className="block">
+                        <span className="text-xs font-medium text-gray-700">To</span>
+                        <input
+                          type="text"
+                          value={replyToField}
+                          onChange={(event) => setReplyToField(event.target.value)}
+                          className="mt-1 w-full text-xs text-gray-800 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          placeholder="recipient@example.com"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs font-medium text-gray-700">Cc</span>
+                        <input
+                          type="text"
+                          value={replyCcField}
+                          onChange={(event) => setReplyCcField(event.target.value)}
+                          className="mt-1 w-full text-xs text-gray-800 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          placeholder="Optional"
+                        />
+                      </label>
                     </div>
 
                     {!aiResponse && !generating && (
