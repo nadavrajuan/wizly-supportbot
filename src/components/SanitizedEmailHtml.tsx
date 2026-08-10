@@ -12,6 +12,12 @@ const ALLOWED_ATTR = ['href', 'src', 'alt', 'title', 'target', 'rel', 'colspan',
 
 const ALLOWED_URI_REGEXP = /^(?:(?:https?|mailto|tel|data):|\/api\/email\/|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i;
 
+function isEmailAttachmentSource(sourcePath: string): boolean {
+  return sourcePath.includes('/api/email/') && (
+    sourcePath.includes('/attachment?') || sourcePath.includes('/attachments/')
+  );
+}
+
 interface SanitizedEmailHtmlProps {
   html: string;
   className?: string;
@@ -20,12 +26,12 @@ interface SanitizedEmailHtmlProps {
 
 async function hydrateAuthenticatedImages(container: HTMLElement): Promise<() => void> {
   const objectUrls: string[] = [];
-  const images = container.querySelectorAll<HTMLImageElement>('img[src^="/api/email/"]');
+  const images = container.querySelectorAll<HTMLImageElement>('img[src*="/api/email/"]');
 
   await Promise.all(
     Array.from(images).map(async (imageElement) => {
       const sourcePath = imageElement.getAttribute('src');
-      if (!sourcePath) return;
+      if (!sourcePath || !isEmailAttachmentSource(sourcePath)) return;
 
       try {
         const response = await fetch(sourcePath, { credentials: 'include' });

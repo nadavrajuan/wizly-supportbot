@@ -6,7 +6,10 @@ import {
 } from './email-format';
 import { resolveReplyTargets, type ReplyTargets } from './email-reply-targets';
 import { decodeGmailBase64 } from './gmail-base64';
+import { attachmentApiPath } from './email-attachment-url';
 import { getDb } from './db';
+
+export { attachmentApiPath } from './email-attachment-url';
 
 export function getOAuthClient() {
   return new google.auth.OAuth2(
@@ -119,8 +122,21 @@ function extractFilenameFromDisposition(contentDisposition: string): string {
   return filenameMatch?.[1]?.trim() ?? '';
 }
 
-function attachmentApiPath(messageId: string, attachmentId: string): string {
-  return `/api/email/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`;
+function findPartWithAttachmentId(
+  part: gmail_v1.Schema$MessagePart | undefined,
+  attachmentId: string
+): gmail_v1.Schema$MessagePart | null {
+  if (!part) return null;
+
+  if (part.body?.attachmentId === attachmentId) return part;
+  if (part.partId === attachmentId && part.body?.data) return part;
+
+  for (const childPart of part.parts ?? []) {
+    const match = findPartWithAttachmentId(childPart, attachmentId);
+    if (match) return match;
+  }
+
+  return null;
 }
 
 function collectAttachments(
@@ -129,20 +145,19 @@ function collectAttachments(
 ): void {
   if (!part) return;
 
-  const attachmentId = part.body?.attachmentId;
+  const gmailAttachmentId = part.body?.attachmentId;
   const inlineData = part.body?.data;
   const mimeType = part.mimeType ?? 'application/octet-stream';
   const isImagePart = mimeType.startsWith('image/');
-  const hasFilename = Boolean(part.filename);
   const contentId = normalizeContentId(extractHeader(part.headers, 'Content-ID'));
   const contentDisposition = extractHeader(part.headers, 'Content-Disposition');
   const filename = part.filename
     || extractFilenameFromDisposition(contentDisposition)
     || (isImagePart ? `image.${mimeType.split('/')[1] ?? 'bin'}` : 'attachment');
 
-  if (attachmentId && (hasFilename || isImagePart || contentDisposition.toLowerCase().includes('inline'))) {
+  if (gmailAttachmentId) {
     attachments.push({
-      attachmentId,
+      attachmentId: gmailAttachmentId,
       mimeType,
       filename,
       contentId: contentId || undefined,
@@ -314,33 +329,44 @@ export async function getAttachmentBytes(
   if (!auth) return null;
 
   const gmail = google.gmail({ version: 'v1', auth });
-  const message = await gmail.users.messages.get({ userId: 'me', id: messageId, format: 'full' });
 
-  const attachments: EmailAttachment[] = [];
-  collectAttachments(message.data.payload as gmail_v1.Schema$MessagePart, attachments);
+  let message;
+  try {
+    message = await gmail.users.messages.get({ userId: 'me', id: messageId, format: 'full' });
+  } catch (error) {
+    console.error('Failed to load message for attachment:', error);
+    return null;
+  }
 
-  const attachment = attachments.find((entry) => entry.attachmentId === attachmentId);
-  if (!attachment) return null;
+  const payload = message.data.payload as gmail_v1.Schema$MessagePart;
+  const matchingPart = findPartWithAttachmentId(payload, attachmentId);
 
-  if (attachment.inlineData) {
+  if (matchingPart?.body?.data && !matchingPart.body.attachmentId) {
     return {
-      data: decodeGmailBase64(attachment.inlineData),
-      mimeType: attachment.mimeType,
+      data: decodeGmailBase64(matchingPart.body.data),
+      mimeType: matchingPart.mimeType ?? 'application/octet-stream',
     };
   }
 
-  const response = await gmail.users.messages.attachments.get({
-    userId: 'me',
-    messageId,
-    id: attachmentId,
-  });
+  const gmailAttachmentId = matchingPart?.body?.attachmentId ?? attachmentId;
 
-  if (!response.data.data) return null;
+  try {
+    const response = await gmail.users.messages.attachments.get({
+      userId: 'me',
+      messageId,
+      id: gmailAttachmentId,
+    });
 
-  return {
-    data: decodeGmailBase64(response.data.data),
-    mimeType: attachment.mimeType,
-  };
+    if (!response.data.data) return null;
+
+    return {
+      data: decodeGmailBase64(response.data.data),
+      mimeType: matchingPart?.mimeType ?? 'application/octet-stream',
+    };
+  } catch (error) {
+    console.error('Failed to fetch Gmail attachment bytes:', error);
+    return null;
+  }
 }
 
 export async function markAsRead(id: string): Promise<void> {

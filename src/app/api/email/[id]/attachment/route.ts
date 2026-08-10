@@ -3,11 +3,12 @@ import { parseAttachmentRequest } from '@/lib/email-attachment-url';
 import { buildAttachmentResponse } from '@/lib/email-attachment-response';
 
 export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string; attachmentId: string }> }
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id: messageId, attachmentId } = await params;
-  const parsedRequest = parseAttachmentRequest(messageId, null, attachmentId);
+  const { id: messageId } = await params;
+  const attachmentId = request.nextUrl.searchParams.get('attachmentId');
+  const parsedRequest = parseAttachmentRequest(messageId, attachmentId);
 
   if (!parsedRequest) {
     return Response.json({ error: 'Missing attachmentId' }, { status: 400 });

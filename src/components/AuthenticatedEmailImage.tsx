@@ -1,16 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { attachmentApiPath } from '@/lib/email-attachment-url';
 
 interface AuthenticatedEmailImageProps {
   messageId: string;
   attachmentId: string;
   alt: string;
   className?: string;
-}
-
-export function attachmentApiPath(messageId: string, attachmentId: string): string {
-  return `/api/email/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`;
 }
 
 export function AuthenticatedEmailImage({

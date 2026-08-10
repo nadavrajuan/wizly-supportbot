@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { SanitizedEmailHtml } from '@/components/SanitizedEmailHtml';
-import { AuthenticatedEmailImage, attachmentApiPath } from '@/components/AuthenticatedEmailImage';
+import { AuthenticatedEmailImage } from '@/components/AuthenticatedEmailImage';
+import { attachmentApiPath } from '@/lib/email-attachment-url';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
