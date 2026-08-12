@@ -9,6 +9,20 @@ config:
   NODE_ENV: "production"
   DATA_DIR: "/app/data"
   APP_URL: "https://wyzly-support.tacobrain.online"
+  UNREAD_REMINDER_RECIPIENT: "daniel@superfy.co"
+
+unreadReminderCron:
+  enabled: true
+  schedule: "0 7 * * *"
+  timeZone: "Etc/UTC"
+  image: "curlimages/curl:8.5.0"
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "32Mi"
+    limits:
+      cpu: "100m"
+      memory: "64Mi"
 
 ingress:
   className: "webapprouting.kubernetes.azure.com"

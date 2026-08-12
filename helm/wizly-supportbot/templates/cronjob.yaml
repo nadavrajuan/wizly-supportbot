@@ -1,0 +1,48 @@
+{{- if .Values.unreadReminderCron.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: wizly-supportbot-unread-reminder
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: wizly-supportbot
+spec:
+  schedule: {{ .Values.unreadReminderCron.schedule | quote }}
+  timeZone: {{ .Values.unreadReminderCron.timeZone | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 120
+      template:
+        metadata:
+          labels:
+            app: wizly-supportbot-cron
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: unread-reminder
+              image: {{ .Values.unreadReminderCron.image | quote }}
+              command:
+                - sh
+                - -c
+                - |
+                  curl -sf -X POST \
+                    -H "Authorization: Bearer ${CRON_SECRET}" \
+                    "http://wizly-supportbot/api/cron/unread-reminder"
+              env:
+                - name: CRON_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: wizly-supportbot-secrets
+                      key: CRON_SECRET
+              resources:
+                requests:
+                  cpu: {{ .Values.unreadReminderCron.resources.requests.cpu | quote }}
+                  memory: {{ .Values.unreadReminderCron.resources.requests.memory | quote }}
+                limits:
+                  cpu: {{ .Values.unreadReminderCron.resources.limits.cpu | quote }}
+                  memory: {{ .Values.unreadReminderCron.resources.limits.memory | quote }}
+{{- end }}

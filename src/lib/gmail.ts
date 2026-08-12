@@ -246,6 +246,38 @@ function stripHtml(html: string): string {
     .trim();
 }
 
+async function fetchEmailSummaries(
+  gmail: gmail_v1.Gmail,
+  messageIds: string[]
+): Promise<EmailSummary[]> {
+  if (messageIds.length === 0) return [];
+
+  const details = await Promise.all(
+    messageIds.map((messageId) =>
+      gmail.users.messages.get({
+        userId: 'me',
+        id: messageId,
+        format: 'metadata',
+        metadataHeaders: ['Subject', 'From', 'Date'],
+      })
+    )
+  );
+
+  return details.map((detail) => {
+    const message = detail.data;
+    const headers = message.payload?.headers ?? [];
+    return {
+      id: message.id!,
+      threadId: message.threadId!,
+      subject: extractHeader(headers, 'Subject') || '(no subject)',
+      from: extractHeader(headers, 'From'),
+      date: extractHeader(headers, 'Date'),
+      snippet: message.snippet ?? '',
+      isUnread: (message.labelIds ?? []).includes('UNREAD'),
+    };
+  });
+}
+
 export async function listEmails(maxResults = 50): Promise<EmailSummary[]> {
   const auth = await getAuthenticatedClient();
   if (!auth) return [];
@@ -257,28 +289,23 @@ export async function listEmails(maxResults = 50): Promise<EmailSummary[]> {
     q: 'in:inbox',
   });
 
-  const messages = list.data.messages ?? [];
+  const messageIds = (list.data.messages ?? []).map((message) => message.id!);
+  return fetchEmailSummaries(gmail, messageIds);
+}
 
-  const details = await Promise.all(
-    messages.map((m) =>
-      gmail.users.messages.get({ userId: 'me', id: m.id!, format: 'metadata',
-        metadataHeaders: ['Subject', 'From', 'Date'] })
-    )
-  );
+export async function listUnreadEmails(maxResults = 50): Promise<EmailSummary[]> {
+  const auth = await getAuthenticatedClient();
+  if (!auth) return [];
 
-  return details.map((d) => {
-    const msg = d.data;
-    const headers = msg.payload?.headers ?? [];
-    return {
-      id: msg.id!,
-      threadId: msg.threadId!,
-      subject: extractHeader(headers, 'Subject') || '(no subject)',
-      from: extractHeader(headers, 'From'),
-      date: extractHeader(headers, 'Date'),
-      snippet: msg.snippet ?? '',
-      isUnread: (msg.labelIds ?? []).includes('UNREAD'),
-    };
+  const gmail = google.gmail({ version: 'v1', auth });
+  const list = await gmail.users.messages.list({
+    userId: 'me',
+    maxResults,
+    q: 'in:inbox is:unread',
   });
+
+  const messageIds = (list.data.messages ?? []).map((message) => message.id!);
+  return fetchEmailSummaries(gmail, messageIds);
 }
 
 export async function getEmail(id: string): Promise<EmailDetail | null> {
@@ -378,6 +405,38 @@ export async function markAsRead(id: string): Promise<void> {
     userId: 'me',
     id,
     requestBody: { removeLabelIds: ['UNREAD'] },
+  });
+}
+
+export async function sendEmail(params: {
+  to: string;
+  subject: string;
+  body: string;
+}): Promise<void> {
+  const auth = await getAuthenticatedClient();
+  if (!auth) throw new Error('Gmail not connected');
+
+  const gmail = google.gmail({ version: 'v1', auth });
+
+  const plainBody = markdownToPlainText(params.body);
+  const htmlBody = markdownToHtmlEmail(params.body);
+  const { boundary, body: multipartBody } = buildMultipartAlternativeBody(plainBody, htmlBody);
+
+  const headers = [
+    `To: ${params.to}`,
+    `Subject: ${params.subject}`,
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    '',
+    multipartBody,
+  ];
+
+  const rawMessage = headers.join('\r\n');
+  const encoded = Buffer.from(rawMessage).toString('base64url');
+
+  await gmail.users.messages.send({
+    userId: 'me',
+    requestBody: { raw: encoded },
   });
 }
 
