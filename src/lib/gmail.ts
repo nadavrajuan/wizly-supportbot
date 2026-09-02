@@ -5,7 +5,12 @@ import {
   markdownToPlainText,
 } from './email-format';
 import { resolveReplyTargets, type ReplyTargets } from './email-reply-targets';
-import { resolveAttachmentFilename } from './email-attachment-filename';
+import {
+  finalizeAttachmentFilename,
+  inferMimeTypeFromBytes,
+  resolveAttachmentFilename,
+  resolveAttachmentMimeType,
+} from './email-attachment-filename';
 import { decodeGmailBase64 } from './gmail-base64';
 import { attachmentApiPath } from './email-attachment-url';
 import { getDb } from './db';
@@ -142,7 +147,7 @@ function collectAttachments(
 
   const gmailAttachmentId = part.body?.attachmentId;
   const inlineData = part.body?.data;
-  const mimeType = part.mimeType ?? 'application/octet-stream';
+  const mimeType = resolveAttachmentMimeType(part);
   const isImagePart = mimeType.startsWith('image/');
   const contentId = normalizeContentId(extractHeader(part.headers, 'Content-ID'));
   const filename = resolveAttachmentFilename(part);
@@ -361,10 +366,20 @@ export async function getAttachmentBytes(
   const matchingPart = findPartWithAttachmentId(payload, attachmentId);
 
   if (matchingPart?.body?.data && !matchingPart.body.attachmentId) {
+    const data = decodeGmailBase64(matchingPart.body.data);
+    const mimeType = resolveAttachmentMimeType(matchingPart);
+    const inferredMimeType = inferMimeTypeFromBytes(data);
+    const resolvedMimeType = inferredMimeType ?? mimeType;
+    const filename = finalizeAttachmentFilename(
+      resolveAttachmentFilename(matchingPart),
+      resolvedMimeType,
+      data
+    );
+
     return {
-      data: decodeGmailBase64(matchingPart.body.data),
-      mimeType: matchingPart.mimeType ?? 'application/octet-stream',
-      filename: resolveAttachmentFilename(matchingPart),
+      data,
+      mimeType: resolvedMimeType,
+      filename,
     };
   }
 
@@ -379,10 +394,20 @@ export async function getAttachmentBytes(
 
     if (!response.data.data) return null;
 
+    const data = decodeGmailBase64(response.data.data);
+    const mimeType = matchingPart ? resolveAttachmentMimeType(matchingPart) : 'application/octet-stream';
+    const inferredMimeType = inferMimeTypeFromBytes(data);
+    const resolvedMimeType = inferredMimeType ?? mimeType;
+    const filename = finalizeAttachmentFilename(
+      matchingPart ? resolveAttachmentFilename(matchingPart) : 'attachment',
+      resolvedMimeType,
+      data
+    );
+
     return {
-      data: decodeGmailBase64(response.data.data),
-      mimeType: matchingPart?.mimeType ?? 'application/octet-stream',
-      filename: matchingPart ? resolveAttachmentFilename(matchingPart) : 'attachment',
+      data,
+      mimeType: resolvedMimeType,
+      filename,
     };
   } catch (error) {
     console.error('Failed to fetch Gmail attachment bytes:', error);
