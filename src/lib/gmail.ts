@@ -5,6 +5,7 @@ import {
   markdownToPlainText,
 } from './email-format';
 import { resolveReplyTargets, type ReplyTargets } from './email-reply-targets';
+import { resolveAttachmentFilename } from './email-attachment-filename';
 import { decodeGmailBase64 } from './gmail-base64';
 import { attachmentApiPath } from './email-attachment-url';
 import { getDb } from './db';
@@ -116,12 +117,6 @@ function normalizeContentId(contentId: string): string {
   return contentId.replace(/^<|>$/g, '');
 }
 
-function extractFilenameFromDisposition(contentDisposition: string): string {
-  const filenameMatch = contentDisposition.match(/filename="([^"]+)"/i)
-    ?? contentDisposition.match(/filename=([^;\s]+)/i);
-  return filenameMatch?.[1]?.trim() ?? '';
-}
-
 function findPartWithAttachmentId(
   part: gmail_v1.Schema$MessagePart | undefined,
   attachmentId: string
@@ -150,10 +145,7 @@ function collectAttachments(
   const mimeType = part.mimeType ?? 'application/octet-stream';
   const isImagePart = mimeType.startsWith('image/');
   const contentId = normalizeContentId(extractHeader(part.headers, 'Content-ID'));
-  const contentDisposition = extractHeader(part.headers, 'Content-Disposition');
-  const filename = part.filename
-    || extractFilenameFromDisposition(contentDisposition)
-    || (isImagePart ? `image.${mimeType.split('/')[1] ?? 'bin'}` : 'attachment');
+  const filename = resolveAttachmentFilename(part);
 
   if (gmailAttachmentId) {
     attachments.push({
@@ -351,7 +343,7 @@ export async function getEmail(id: string): Promise<EmailDetail | null> {
 export async function getAttachmentBytes(
   messageId: string,
   attachmentId: string
-): Promise<{ data: Buffer; mimeType: string } | null> {
+): Promise<{ data: Buffer; mimeType: string; filename: string } | null> {
   const auth = await getAuthenticatedClient();
   if (!auth) return null;
 
@@ -372,6 +364,7 @@ export async function getAttachmentBytes(
     return {
       data: decodeGmailBase64(matchingPart.body.data),
       mimeType: matchingPart.mimeType ?? 'application/octet-stream',
+      filename: resolveAttachmentFilename(matchingPart),
     };
   }
 
@@ -389,6 +382,7 @@ export async function getAttachmentBytes(
     return {
       data: decodeGmailBase64(response.data.data),
       mimeType: matchingPart?.mimeType ?? 'application/octet-stream',
+      filename: matchingPart ? resolveAttachmentFilename(matchingPart) : 'attachment',
     };
   } catch (error) {
     console.error('Failed to fetch Gmail attachment bytes:', error);

@@ -684,6 +684,7 @@ function DashboardInner() {
                                 <p className="text-xs text-gray-500 truncate">{attachment.filename}</p>
                                 <a
                                   href={attachmentApiPath(selectedEmail.id, attachment.attachmentId)}
+                                  download={attachment.filename}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="text-xs text-indigo-600 hover:text-indigo-700 shrink-0"
@@ -702,6 +703,7 @@ function DashboardInner() {
                             <li key={attachment.attachmentId}>
                               <a
                                 href={attachmentApiPath(selectedEmail.id, attachment.attachmentId)}
+                                download={attachment.filename}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-sm text-indigo-600 hover:text-indigo-700 underline"

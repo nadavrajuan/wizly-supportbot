@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { buildContentDispositionHeader } from '@/lib/email-attachment-filename';
 import { getAttachmentBytes } from '@/lib/gmail';
 
 export async function buildAttachmentResponse(
@@ -14,6 +15,7 @@ export async function buildAttachmentResponse(
     status: 200,
     headers: {
       'Content-Type': attachment.mimeType,
+      'Content-Disposition': buildContentDispositionHeader(attachment.filename),
       'Cache-Control': 'private, max-age=3600',
     },
   });
